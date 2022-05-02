@@ -1,9 +1,5 @@
-//
-// Created by Chang on 2022/4/18.
-//
-
-#ifndef CPPTEST_MYSTL_H
-#define CPPTEST_MYSTL_H
+#ifndef GOCONTAINER_H
+#define GOCONTAINER_H
 
 //#define SLICE_CAPACITY_LIMIT
 #define SLICE_CAPACITY_APPEND_LIMIT 1024*1024 // 1M
@@ -11,7 +7,7 @@
 
 #include <regex>
 
-namespace mySTL{
+namespace go{
     template<typename T>
     class slice{
     public:
@@ -86,6 +82,4 @@ namespace mySTL{
     }
 }
 
-
-
-#endif //CPPTEST_MYSTL_H
+#endif GOCONTAINER_H
