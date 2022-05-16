@@ -3,4 +3,4 @@ project(GoCpp)
 
 set(CMAKE_CXX_STANDARD 20)
 
-add_executable(GoCpp main.cpp)
+add_executable(GoCpp main.cpp test.cpp goContainer/goMap.h)
