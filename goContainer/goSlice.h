@@ -11,6 +11,9 @@ namespace go{
     template<typename T>
     class slice{
     private:
+        // head指向数组指针，后者指向保存数据的数组
+        // head_mtx为修改head时需要的互斥量
+        // begin为当前切片的实际开始下标
         T **head = new T*;
         std::mutex *head_mtx = new std::mutex;
         size_t begin = 0;
@@ -18,28 +21,31 @@ namespace go{
         slice(const size_t size) : size(size), capacity(size){
             *head = new T[capacity];
         }
+
         void capacityExpansion(){
             std::lock_guard<std::mutex> mtx(*head_mtx);
+            // 新容量为之前容量的1.5倍，至少增加1,大于限制时只增加固定值
+            // 不设置容量上限（可能引发容量溢出错误）
             size_t new_capacity = capacity;
             new_capacity += capacity<SLICE_CAPACITY_APPEND_LIMIT?
                             capacity/2==0? 1:capacity/2 : SLICE_CAPACITY_APPEND_LEN;
 
             T* new_head = new T[new_capacity];
+            capacity = new_capacity;
             for(int i=0;i<size;i++){
+                // 移动原有的值到新的数组
                 new_head[i] = std::move((*head)[begin+i]);
             }
-
-            capacity = new_capacity;
 
             if(original){
                 std::swap(*head, new_head);
                 delete[] new_head;
             }
             else{
-                // set new head
+                // 令head指向新的一级指针
                 head = new T*;
                 *head = new_head;
-                // set a new mtx
+                // 设置新的head_mtx
                 head_mtx = new std::mutex;
 
                 original = true;
@@ -47,6 +53,7 @@ namespace go{
             }
         }
     public:
+        // original 说明是否是原始切片，原始切片需要负责堆资源的释放
         bool original = true;
         size_t size = 0;
         size_t capacity = 0;
@@ -88,11 +95,18 @@ namespace go{
         }
 
         bool empty() { return size == 0; }
-        void append(T&& t){
-            //capacity expansion
+
+        void append(T& t){
             if(size==capacity)
                 capacityExpansion();
-
+            // t为左值，应构造新的匿名实例并保存
+            (*head)[begin+size] = T(t);
+            size++;
+        }
+        void append(T&& t){
+            if(size==capacity)
+                capacityExpansion();
+            // 转发t的引用，一般是调用右值赋值运算
             (*head)[begin+size] = std::forward<T>(t);
             size++;
         }
@@ -113,10 +127,12 @@ namespace go{
             for(int i=0;i<size;i++)
                 (*head)[i] = t;
         }
-        slice(const std::initializer_list<T>& elements) : slice(elements.size()){
+        slice(std::initializer_list<T>&& elements) : slice(elements.size()){
             int i=0;
             for(auto it=elements.begin(); it!=elements.end(); it++){
-                (*head)[i++] = *it;
+                // 如果init_list中保存的是类变量，则其类型为 const type
+                // 此时需要取消const类型并绑定到右值引用进行移动赋值,否则会有指向临时变量的风险
+                (*head)[i++] = std::move(const_cast<T&>(*it));
             }
         }
 
@@ -164,6 +180,7 @@ namespace go{
         return slice<T>();
     }
 
+    // 对已有切片再次切片
     template<typename T>
     static slice<T> make_slice(slice<T>& t, size_t start, size_t end) {
         if(start<0 || end>t.size)
